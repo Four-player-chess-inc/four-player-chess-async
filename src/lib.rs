@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::{Mutex, Notify};
+use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone)]
 pub enum ServerToPlayer {
@@ -56,6 +57,7 @@ pub struct Game {
     players_tx: PlayerTxs,
     players_rx: PlayerRxs,
     all_joined_notify: Arc<Notify>,
+    jh: JoinHandle<()>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -80,7 +82,7 @@ impl Game {
 
         let game = FourPlayerChess::new();
 
-        tokio::spawn(Self::game_process(
+        let jh = tokio::spawn(Self::game_process(
             server_rx_hm,
             server_tx_hm,
             all_joined_notify.clone(),
@@ -91,6 +93,7 @@ impl Game {
             players_tx: player_tx_hm,
             players_rx: player_rx_hm,
             all_joined_notify,
+            jh,
         }
     }
 
@@ -118,7 +121,8 @@ impl Game {
                 PlayerToServer::Move(m) => match game.lock().await.make_move(m.clone()) {
                     Ok(_) => return MoveWait::Move(m),
                     Err(e) => {
-                        #[allow(unused_must_use)] {
+                        #[allow(unused_must_use)]
+                        {
                             tx.send(ServerToPlayer::MoveError { mv: m, error: e });
                         }
                     }
@@ -160,7 +164,7 @@ impl Game {
                     MoveWait::Move(m) => Self::broadcast(&tx, ServerToPlayer::Move(m)),
                     MoveWait::Surrender | MoveWait::RxDisconnected => {
                         g.lock().await.surrender();
-                        Self::broadcast(&tx, Surrender(who_move));
+                        //Self::broadcast(&tx, Surrender(who_move));
                     }
                 },
                 // timeout
@@ -169,7 +173,7 @@ impl Game {
                     Self::broadcast(&tx, Surrender(who_move));
                 }
             }
-            
+
             let l = g.lock().await;
             let new_players_states = l.get_players_states();
             who_move_o = l.who_move_next();
@@ -179,7 +183,6 @@ impl Game {
                 players_states = new_players_states;
                 Self::broadcast(&tx, StateChange(diff));
             }
-
         }
 
         Self::broadcast(&tx, GameOver(g.lock().await.who_win().unwrap()));
@@ -187,9 +190,16 @@ impl Game {
 
     fn broadcast(tx: &ServerTxs, msg: ServerToPlayer) {
         tx.iter().for_each(|(_, v)| {
-            #[allow(unused_must_use)] {
+            #[allow(unused_must_use)]
+            {
                 v.send(msg.clone());
             }
         });
+    }
+}
+
+impl Drop for Game {
+    fn drop(&mut self) {
+        self.jh.abort();
     }
 }
