@@ -2,6 +2,7 @@ mod ingame;
 mod players_states_diff;
 #[cfg(test)]
 mod tests;
+mod chess_clock;
 
 use crate::ingame::Ingame;
 use crate::players_states_diff::PlayersStatesDiff;
