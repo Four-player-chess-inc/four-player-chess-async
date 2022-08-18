@@ -17,8 +17,6 @@ fn init(game: &mut Game) -> (Ingame, Ingame, Ingame, Ingame) {
     )
 }
 
-fn dropit<T>(t: T) {}
-
 // currently 4 players only
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn join() {
@@ -36,7 +34,7 @@ async fn channel_close_if_game_drop() {
     let mut game = Game::new(ChessClock::default());
     let (a, b, c, d) = init(&mut game);
     assert!(a.tx.send(PlayerToServer::Surrender).is_ok());
-    dropit(game);
+    core::mem::drop(game);
     // wait a bit, while game is dropping
     tokio::time::sleep(Duration::from_millis(1)).await;
     assert!(b.tx.send(PlayerToServer::Surrender).is_err());

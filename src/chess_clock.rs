@@ -7,7 +7,7 @@ use  tokio::time::Sleep;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 
-
+#[derive(Clone)]
 pub struct ChessClock {
     fast: Duration,
     timer: Duration,

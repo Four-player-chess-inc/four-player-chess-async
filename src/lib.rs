@@ -16,10 +16,11 @@ use four_player_chess::state::State;
 use futures::future::Either;
 use futures::{future, FutureExt};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc};
 use std::time::Duration;
+use futures_util::SinkExt;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task::JoinHandle;
 use crate::chess_clock::ChessClock;
 
@@ -53,7 +54,6 @@ type PlayerTxs = HashMap<Ident, PlayerTx>;
 
 type ServerRx = UnboundedReceiver<PlayerToServer>;
 type ServerTx = UnboundedSender<ServerToPlayer>;
-type ServerRxs = HashMap<Ident, ServerRx>;
 type ServerTxs = HashMap<Ident, ServerTx>;
 
 pub struct Game {
@@ -66,19 +66,27 @@ pub struct Game {
 #[derive(Debug, PartialEq)]
 pub struct JoinErr;
 
+struct ServerRxClock {
+    server_rx: ServerRx,
+    clock: ChessClock
+}
+
 impl Game {
-    pub fn new(cock: ChessClock) -> Game {
-        let mut server_rx_hm = HashMap::new();
+    pub fn new(clock: ChessClock) -> Game {
         let mut server_tx_hm = HashMap::new();
-        let mut player_rx_hm = HashMap::new();
+        let mut server_rx_clock_hm = HashMap::new();
         let mut player_tx_hm = HashMap::new();
+        let mut player_rx_hm = HashMap::new();
         for i in [First, Second, Third, Fourth] {
             let (server_tx, player_rx) = unbounded_channel();
             let (player_tx, server_rx) = unbounded_channel();
+            player_tx_hm.insert(i, player_tx);
             player_rx_hm.insert(i, player_rx);
             server_tx_hm.insert(i, server_tx);
-            server_rx_hm.insert(i, server_rx);
-            player_tx_hm.insert(i, player_tx);
+            server_rx_clock_hm.insert(i, ServerRxClock {
+               server_rx,
+                clock: clock.clone()
+            });
         }
 
         let all_joined_notify = Arc::new(Notify::new());
@@ -86,8 +94,8 @@ impl Game {
         let game = FourPlayerChess::new();
 
         let jh = tokio::spawn(Self::game_process(
-            server_rx_hm,
             server_tx_hm,
+            server_rx_clock_hm,
             all_joined_notify.clone(),
             game,
         ));
@@ -137,8 +145,8 @@ impl Game {
     }
 
     async fn game_process(
-        mut rx: ServerRxs,
-        tx: ServerTxs,
+        server_txs: ServerTxs,
+        mut server_rx_clock: HashMap<Ident, ServerRxClock>,
         all_joined_notify: Arc<Notify>,
         game: FourPlayerChess,
     ) {
@@ -152,19 +160,28 @@ impl Game {
         drop(l);
 
         while let Some(who_move) = who_move_o {
-            Self::broadcast(&tx, CallToMove(who_move));
 
-            let player_rx = rx.get_mut(&who_move).unwrap();
-            let player_tx = tx.get(&who_move).unwrap();
+            Self::broadcast(&server_txs, CallToMove(who_move));
 
-            let wait_move = Self::wait_permitted_move(g.clone(), player_rx, player_tx);
-            let timeout = tokio::time::sleep(Duration::from_secs(1));
+            /*let strg = storage.get(&who_move).unwrap();
+            let mut server_rx = strg.server_rx.write().await;
+            let server_tx = &strg.server_tx;
+            let mut clock = strg.clock.write().await;*/
 
-            let x = future::select(wait_move.boxed(), timeout.boxed()).await;
+            let server_tx = server_txs.get(&who_move).unwrap();
+            let mut rxs_clocks = server_rx_clock.get_mut(&who_move).unwrap();
+            let mut server_rx = &mut rxs_clocks.server_rx;
+            let mut clock = &mut rxs_clocks.clock;
+
+            let wait_move = Self::wait_permitted_move(g.clone(), server_rx, server_tx);
+            //let timeout = tokio::time::sleep(Duration::from_secs(1));
+
+            let x = future::select(wait_move.boxed(), clock.start().boxed()).await;
+            clock.stop();
             match x {
                 // wait_move_result
                 Either::Left((r, _)) => match r {
-                    MoveWait::Move(m) => Self::broadcast(&tx, ServerToPlayer::Move(m)),
+                    MoveWait::Move(m) => Self::broadcast(&server_txs, ServerToPlayer::Move(m)),
                     MoveWait::Surrender | MoveWait::RxDisconnected => {
                         g.lock().await.surrender();
                         //Self::broadcast(&tx, Surrender(who_move));
@@ -173,7 +190,7 @@ impl Game {
                 // timeout
                 Either::Right((_, _)) => {
                     g.lock().await.surrender();
-                    Self::broadcast(&tx, Surrender(who_move));
+                    Self::broadcast(&server_txs, Surrender(who_move));
                 }
             }
 
@@ -184,11 +201,11 @@ impl Game {
 
             if let Some(diff) = new_players_states.diff(&players_states) {
                 players_states = new_players_states;
-                Self::broadcast(&tx, StateChange(diff));
+                Self::broadcast(&server_txs, StateChange(diff));
             }
         }
 
-        Self::broadcast(&tx, GameOver(g.lock().await.who_win().unwrap()));
+        Self::broadcast(&server_txs, GameOver(g.lock().await.who_win().unwrap()));
     }
 
     fn broadcast(tx: &ServerTxs, msg: ServerToPlayer) {
