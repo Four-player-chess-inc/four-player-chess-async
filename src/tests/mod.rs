@@ -1,4 +1,4 @@
-use crate::{Game, Ingame, JoinErr};
+use crate::{ChessClock, Game, Ingame, JoinErr};
 use crate::{PlayerToServer, ServerToPlayer};
 use four_player_chess::ident::Ident::{First, Fourth, Second, Third};
 use four_player_chess::mv::move_or_capture::MoveOrCapture;
@@ -22,7 +22,7 @@ fn dropit<T>(t: T) {}
 // currently 4 players only
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn join() {
-    let mut game = Game::new();
+    let mut game = Game::new(ChessClock::default());
     assert!(game.join(First).is_ok());
     assert!(game.join(Second).is_ok());
     assert!(game.join(Third).is_ok());
@@ -33,7 +33,7 @@ async fn join() {
 // make sure that player send channel closed if game drop
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn channel_close_if_game_drop() {
-    let mut game = Game::new();
+    let mut game = Game::new(ChessClock::default());
     let (a, b, c, d) = init(&mut game);
     assert!(a.tx.send(PlayerToServer::Surrender).is_ok());
     dropit(game);
@@ -50,7 +50,7 @@ async fn channel_close_if_game_drop() {
 //  CallToMove(Second)
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn status_change() {
-    let mut game = Game::new();
+    let mut game = Game::new(ChessClock::default());
     let (mut a, mut b, mut c, mut d) = init(&mut game);
     tokio::time::sleep(Duration::from_millis(1)).await;
     assert!(matches!(
@@ -72,7 +72,7 @@ async fn status_change() {
 // all surrender instead Third, Third win
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn surrenders() {
-    let mut game = Game::new();
+    let mut game = Game::new(ChessClock::default());
     let (mut a, mut b, mut c, mut d) = init(&mut game);
 
     tokio::time::sleep(Duration::from_millis(1)).await;

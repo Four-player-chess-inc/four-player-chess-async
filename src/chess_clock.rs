@@ -1,33 +1,40 @@
-use tokio::time::Duration;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tokio::time::{Duration, sleep};
 use tokio::time::Instant;
+use  tokio::time::Sleep;
+use futures::FutureExt;
+use futures::future::BoxFuture;
 
-pub(crate) struct ChessClock {
+
+pub struct ChessClock {
     fast: Duration,
     timer: Duration,
     started: Option<Instant>
 }
 
 impl ChessClock {
-    pub(crate) fn new(fast: Duration, timer: Duration) -> ChessClock {
+    pub fn new(fast: Duration, timer: Duration) -> ChessClock {
         ChessClock {
             fast, timer, started: None
         }
     }
 
-    pub(crate) fn start(&mut self) {
-        self.started = Some(Instant::now());
-    }
+    //pub fn start(&mut self) {
 
-    pub(crate) fn stop(&mut self) {
+    //}
+
+    pub fn stop(&mut self) {
         if let Some(s) = self.started.take() {
             let e = s.elapsed().saturating_sub(self.fast);
             self.timer = self.timer.saturating_sub(e);
         }
     }
 
-    pub(crate) fn start_and_take_waiter(&mut self) -> tokio::time::Sleep {
-        self.start();
-        tokio::time::sleep(self.timer + self.fast)
+    pub fn start(&mut self) -> Sleep {
+        self.started = Some(Instant::now());
+        sleep(self.timer + self.fast)
     }
 }
 

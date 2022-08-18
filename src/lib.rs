@@ -1,8 +1,9 @@
 mod ingame;
 mod players_states_diff;
+pub mod chess_clock;
 #[cfg(test)]
 mod tests;
-mod chess_clock;
+
 
 use crate::ingame::Ingame;
 use crate::players_states_diff::PlayersStatesDiff;
@@ -20,6 +21,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
+use crate::chess_clock::ChessClock;
 
 #[derive(Debug, Clone)]
 pub enum ServerToPlayer {
@@ -65,7 +67,7 @@ pub struct Game {
 pub struct JoinErr;
 
 impl Game {
-    pub fn new() -> Game {
+    pub fn new(cock: ChessClock) -> Game {
         let mut server_rx_hm = HashMap::new();
         let mut server_tx_hm = HashMap::new();
         let mut player_rx_hm = HashMap::new();

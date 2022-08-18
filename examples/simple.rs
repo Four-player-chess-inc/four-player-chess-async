@@ -9,6 +9,7 @@ use futures::future::join_all;
 use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use four_player_chess_async::chess_clock::ChessClock;
 
 async fn player_process(ident: Ident, game: Arc<Mutex<Game>>) {
     let ingame = game.lock().await.join(ident).unwrap();
@@ -28,7 +29,7 @@ async fn player_process(ident: Ident, game: Arc<Mutex<Game>>) {
 
 #[tokio::main]
 async fn main() {
-    let game = Arc::new(Mutex::new(Game::new()));
+    let game = Arc::new(Mutex::new(Game::new(ChessClock::default())));
 
     let mut p = Vec::new();
 
