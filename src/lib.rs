@@ -1,13 +1,13 @@
+pub mod chess_clock;
 mod ingame;
 mod players_states_diff;
-pub mod chess_clock;
 #[cfg(test)]
 mod tests;
 
-
+use crate::chess_clock::ChessClock;
 use crate::ingame::Ingame;
 use crate::players_states_diff::PlayersStatesDiff;
-use crate::ServerToPlayer::{CallToMove, GameOver, StateChange, Surrender};
+use crate::ServerToPlayer::{CallToMove, GameOver, StateChange};
 use four_player_chess::four_player_chess::FourPlayerChess;
 use four_player_chess::ident::Ident;
 use four_player_chess::ident::Ident::{First, Fourth, Second, Third};
@@ -15,20 +15,34 @@ use four_player_chess::mv::{MakeMoveError, Move};
 use four_player_chess::state::State;
 use futures::future::Either;
 use futures::{future, FutureExt};
-use std::collections::HashMap;
-use std::sync::{Arc};
-use std::time::Duration;
 use futures_util::SinkExt;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task::JoinHandle;
-use crate::chess_clock::ChessClock;
+
+#[derive(Debug, Clone)]
+pub struct Timers {
+    pub fast: Duration,
+    pub rest_of_time: Duration
+}
+
+impl From<&mut ChessClock> for Timers {
+    fn from(c: &mut ChessClock) -> Self {
+        let t = c.timers();
+        Timers {
+            fast: t.0,
+            rest_of_time: t.1
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum ServerToPlayer {
-    CallToMove(Ident),
+    CallToMove { who: Ident, timers: Timers },
     MoveError { mv: Move, error: MakeMoveError },
-    Surrender(Ident),
     GameOver(Ident),
     Move(Move),
     StateChange(HashMap<Ident, State>),
@@ -68,7 +82,7 @@ pub struct JoinErr;
 
 struct ServerRxClock {
     server_rx: ServerRx,
-    clock: ChessClock
+    clock: ChessClock,
 }
 
 impl Game {
@@ -83,10 +97,13 @@ impl Game {
             player_tx_hm.insert(i, player_tx);
             player_rx_hm.insert(i, player_rx);
             server_tx_hm.insert(i, server_tx);
-            server_rx_clock_hm.insert(i, ServerRxClock {
-               server_rx,
-                clock: clock.clone()
-            });
+            server_rx_clock_hm.insert(
+                i,
+                ServerRxClock {
+                    server_rx,
+                    clock: clock.clone(),
+                },
+            );
         }
 
         let all_joined_notify = Arc::new(Notify::new());
@@ -160,37 +177,29 @@ impl Game {
         drop(l);
 
         while let Some(who_move) = who_move_o {
-
-            Self::broadcast(&server_txs, CallToMove(who_move));
-
-            /*let strg = storage.get(&who_move).unwrap();
-            let mut server_rx = strg.server_rx.write().await;
-            let server_tx = &strg.server_tx;
-            let mut clock = strg.clock.write().await;*/
-
             let server_tx = server_txs.get(&who_move).unwrap();
             let mut rxs_clocks = server_rx_clock.get_mut(&who_move).unwrap();
             let mut server_rx = &mut rxs_clocks.server_rx;
             let mut clock = &mut rxs_clocks.clock;
 
+            Self::broadcast(&server_txs, CallToMove { who: who_move, timers: clock.into() });
+
             let wait_move = Self::wait_permitted_move(g.clone(), server_rx, server_tx);
-            //let timeout = tokio::time::sleep(Duration::from_secs(1));
 
             let x = future::select(wait_move.boxed(), clock.start().boxed()).await;
             clock.stop();
+
             match x {
                 // wait_move_result
                 Either::Left((r, _)) => match r {
                     MoveWait::Move(m) => Self::broadcast(&server_txs, ServerToPlayer::Move(m)),
                     MoveWait::Surrender | MoveWait::RxDisconnected => {
                         g.lock().await.surrender();
-                        //Self::broadcast(&tx, Surrender(who_move));
                     }
                 },
                 // timeout
                 Either::Right((_, _)) => {
                     g.lock().await.surrender();
-                    Self::broadcast(&server_txs, Surrender(who_move));
                 }
             }
 

@@ -3,13 +3,13 @@ use four_player_chess::ident::Ident::{First, Fourth, Second, Third};
 use four_player_chess::mv::move_or_capture::MoveOrCapture;
 use four_player_chess::mv::Move;
 use four_player_chess::position::Position::{e2, e4};
+use four_player_chess_async::chess_clock::ChessClock;
 use four_player_chess_async::Game;
 use four_player_chess_async::PlayerToServer;
 use futures::future::join_all;
 use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use four_player_chess_async::chess_clock::ChessClock;
 
 async fn player_process(ident: Ident, game: Arc<Mutex<Game>>) {
     let ingame = game.lock().await.join(ident).unwrap();

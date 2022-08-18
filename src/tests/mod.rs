@@ -8,13 +8,13 @@ use four_player_chess::state::State;
 use std::collections::HashMap;
 use std::time::Duration;
 
-fn init(game: &mut Game) -> (Ingame, Ingame, Ingame, Ingame) {
-    (
-        game.join(First).unwrap(),
-        game.join(Second).unwrap(),
-        game.join(Third).unwrap(),
-        game.join(Fourth).unwrap(),
-    )
+fn init_game() -> (Game, Ingame, Ingame, Ingame, Ingame) {
+    let mut g = Game::new(ChessClock::default());
+    let a = g.join(First).unwrap();
+    let b = g.join(Second).unwrap();
+    let c = g.join(Third).unwrap();
+    let d = g.join(Fourth).unwrap();
+    (g, a, b, c, d)
 }
 
 // currently 4 players only
@@ -31,10 +31,9 @@ async fn join() {
 // make sure that player send channel closed if game drop
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn channel_close_if_game_drop() {
-    let mut game = Game::new(ChessClock::default());
-    let (a, b, c, d) = init(&mut game);
+    let (g, a, b, c, d) = init_game();
     assert!(a.tx.send(PlayerToServer::Surrender).is_ok());
-    core::mem::drop(game);
+    core::mem::drop(g);
     // wait a bit, while game is dropping
     tokio::time::sleep(Duration::from_millis(1)).await;
     assert!(b.tx.send(PlayerToServer::Surrender).is_err());
@@ -48,12 +47,11 @@ async fn channel_close_if_game_drop() {
 //  CallToMove(Second)
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn status_change() {
-    let mut game = Game::new(ChessClock::default());
-    let (mut a, mut b, mut c, mut d) = init(&mut game);
+    let (g, mut a, mut b, mut c, mut d) = init_game();
     tokio::time::sleep(Duration::from_millis(1)).await;
     assert!(matches!(
         b.rx.try_recv(),
-        Ok(ServerToPlayer::CallToMove(First))
+        Ok(ServerToPlayer::CallToMove { who, timers }) if who == First
     ));
     assert!(a.tx.send(PlayerToServer::Surrender).is_ok());
     tokio::time::sleep(Duration::from_millis(1)).await;
@@ -63,20 +61,19 @@ async fn status_change() {
     tokio::time::sleep(Duration::from_millis(1)).await;
     assert!(matches!(
         b.rx.try_recv(),
-        Ok(ServerToPlayer::CallToMove(Second))
+         Ok(ServerToPlayer::CallToMove { who, timers }) if who == Second
     ));
 }
 
 // all surrender instead Third, Third win
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn surrenders() {
-    let mut game = Game::new(ChessClock::default());
-    let (mut a, mut b, mut c, mut d) = init(&mut game);
+    let (g, mut a, mut b, mut c, mut d) = init_game();
 
     tokio::time::sleep(Duration::from_millis(1)).await;
     assert!(matches!(
         a.rx.try_recv(),
-        Ok(ServerToPlayer::CallToMove(First))
+         Ok(ServerToPlayer::CallToMove { who, timers }) if who == First
     ));
     a.tx.send(PlayerToServer::Surrender);
 
@@ -86,7 +83,7 @@ async fn surrenders() {
     );
     assert!(matches!(
         a.rx.try_recv(),
-        Ok(ServerToPlayer::CallToMove(Second))
+         Ok(ServerToPlayer::CallToMove { who, timers }) if who == Second
     ));
     b.tx.send(PlayerToServer::Surrender);
 
@@ -96,7 +93,7 @@ async fn surrenders() {
     );
     assert!(matches!(
         a.rx.try_recv(),
-        Ok(ServerToPlayer::CallToMove(Third))
+         Ok(ServerToPlayer::CallToMove { who, timers }) if who == Third
     ));
     c.tx.send(PlayerToServer::Move(Move::MoveOrCapture(MoveOrCapture {
         from: Position::d13,
@@ -113,7 +110,7 @@ async fn surrenders() {
     ));
     assert!(matches!(
         a.rx.try_recv(),
-        Ok(ServerToPlayer::CallToMove(Fourth))
+         Ok(ServerToPlayer::CallToMove { who, timers }) if who == Fourth
     ));
     d.tx.send(PlayerToServer::Surrender);
 
@@ -121,10 +118,18 @@ async fn surrenders() {
     assert!(
         matches!(a.rx.try_recv(), Ok(ServerToPlayer::StateChange(state)) if state == HashMap::from([(Fourth, State::Lost)]))
     );
-    assert!(
-        matches!(a.rx.try_recv(), Ok(ServerToPlayer::GameOver(Third)))
-    );
-    assert!(
-        matches!(a.rx.try_recv(), Err(TryRecvError))
-    );
+    assert!(matches!(
+        a.rx.try_recv(),
+        Ok(ServerToPlayer::GameOver(Third))
+    ));
+    assert!(matches!(a.rx.try_recv(), Err(TryRecvError)));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn timeouts() {
+    let mut g = Game::new(ChessClock::new(Duration::from_secs(5), Duration::from_secs(10)));
+    let a = g.join(First).unwrap();
+    let b = g.join(Second).unwrap();
+    let c = g.join(Third).unwrap();
+    let d = g.join(Fourth).unwrap();
 }
