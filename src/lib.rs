@@ -232,8 +232,11 @@ impl GameBootstrap {
     }
 }
 
-/*impl Drop for Game {
+// if bootstrap dropped while we still waiting joins, drop task
+impl Drop for GameBootstrap {
     fn drop(&mut self) {
-        self.jh.abort();
+        if !self.players_tx.is_empty() {
+            self.jh.abort();
+        }
     }
-}*/
+}
