@@ -11,9 +11,9 @@ impl PlayersStatesDiff for HashMap<Ident, State> {
         let x = self
             .clone()
             .into_iter()
-            .filter(|(k, v)| other.get(&k).map_or(true, |v2| v2 != v))
+            .filter(|(k, v)| other.get(k).map_or(true, |v2| v2 != v))
             .collect::<HashMap<Ident, State>>();
-        if x.is_empty() == false {
+        if !x.is_empty() {
             return Some(x);
         }
         None

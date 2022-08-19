@@ -22,7 +22,7 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Timers {
     pub fast: Duration,
     pub rest_of_time: Duration,
@@ -76,7 +76,7 @@ pub struct Game {
     jh: JoinHandle<()>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct JoinErr;
 
 struct ServerRxClock {
