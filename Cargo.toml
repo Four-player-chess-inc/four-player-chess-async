@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "sync"] }
 tokio-stream = "0.1"
-four-player-chess = { git="https://github.com/Four-player-chess-inc/four-player-chess-rs", rev="51c856d" }
+four-player-chess = { git="https://github.com/Four-player-chess-inc/four-player-chess-rs", rev="5454bc7" }
 futures = "0.3"
 futures-util = "0.3"
 
