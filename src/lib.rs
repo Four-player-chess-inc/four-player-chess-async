@@ -23,10 +23,10 @@ use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task::JoinHandle;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Timers {
     pub fast: Duration,
-    pub rest_of_time: Duration
+    pub rest_of_time: Duration,
 }
 
 impl From<&mut ChessClock> for Timers {
@@ -34,7 +34,7 @@ impl From<&mut ChessClock> for Timers {
         let t = c.timers();
         Timers {
             fast: t.0,
-            rest_of_time: t.1
+            rest_of_time: t.1,
         }
     }
 }
@@ -182,7 +182,13 @@ impl Game {
             let mut server_rx = &mut rxs_clocks.server_rx;
             let mut clock = &mut rxs_clocks.clock;
 
-            Self::broadcast(&server_txs, CallToMove { who: who_move, timers: clock.into() });
+            Self::broadcast(
+                &server_txs,
+                CallToMove {
+                    who: who_move,
+                    timers: clock.into(),
+                },
+            );
 
             let wait_move = Self::wait_permitted_move(g.clone(), server_rx, server_tx);
 

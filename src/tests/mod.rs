@@ -1,3 +1,4 @@
+use crate::Timers;
 use crate::{ChessClock, Game, Ingame, JoinErr};
 use crate::{PlayerToServer, ServerToPlayer};
 use four_player_chess::ident::Ident::{First, Fourth, Second, Third};
@@ -125,11 +126,103 @@ async fn surrenders() {
     assert!(matches!(a.rx.try_recv(), Err(TryRecvError)));
 }
 
+// make sure that chess clock does not spend if we make move while fast timer
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn timeouts() {
-    let mut g = Game::new(ChessClock::new(Duration::from_secs(5), Duration::from_secs(10)));
-    let a = g.join(First).unwrap();
+    let mut g = Game::new(ChessClock::new(
+        Duration::from_secs(2),
+        Duration::from_secs(10),
+    ));
+    let mut a = g.join(First).unwrap();
     let b = g.join(Second).unwrap();
     let c = g.join(Third).unwrap();
     let d = g.join(Fourth).unwrap();
+    assert!(matches!(
+        a.rx.recv().await,
+         Some(ServerToPlayer::CallToMove { who, timers }) if who == First
+    ));
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    a.tx.send(PlayerToServer::Move(Move::MoveOrCapture(MoveOrCapture {
+        from: Position::e2,
+        to: Position::e4,
+    })));
+    b.tx.send(PlayerToServer::Move(Move::MoveOrCapture(MoveOrCapture {
+        from: Position::b4,
+        to: Position::c4,
+    })));
+    c.tx.send(PlayerToServer::Surrender);
+    d.tx.send(PlayerToServer::Surrender);
+
+    // skip first move broadcast
+    a.rx.recv().await;
+    // calltomove second
+    a.rx.recv().await;
+    // second move broadcast
+    a.rx.recv().await;
+    // calltomove third
+    a.rx.recv().await;
+    // surrender third
+    a.rx.recv().await;
+    // calltomove fourth
+    a.rx.recv().await;
+    // surrender fourth
+    a.rx.recv().await;
+
+    assert!(matches!(
+        a.rx.recv().await,
+         Some(ServerToPlayer::CallToMove { who, timers }) if who == First && timers == Timers { fast: Duration::from_secs(2), rest_of_time: Duration::from_secs(10) }
+    ));
+}
+
+// check rest of time consumption
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn clock_rest_of_time() {
+    let mut g = Game::new(ChessClock::new(
+        Duration::from_secs(2),
+        Duration::from_secs(10),
+    ));
+    let mut a = g.join(First).unwrap();
+    let b = g.join(Second).unwrap();
+    let c = g.join(Third).unwrap();
+    let d = g.join(Fourth).unwrap();
+
+    assert!(matches!(
+        a.rx.recv().await,
+         Some(ServerToPlayer::CallToMove { who, timers }) if who == First
+    ));
+
+    tokio::time::sleep(Duration::from_secs(3)).await;
+
+    a.tx.send(PlayerToServer::Move(Move::MoveOrCapture(MoveOrCapture {
+        from: Position::e2,
+        to: Position::e4,
+    })));
+    b.tx.send(PlayerToServer::Move(Move::MoveOrCapture(MoveOrCapture {
+        from: Position::b4,
+        to: Position::c4,
+    })));
+    c.tx.send(PlayerToServer::Surrender);
+    d.tx.send(PlayerToServer::Surrender);
+
+    // skip first move broadcast
+    a.rx.recv().await;
+    // calltomove second
+    a.rx.recv().await;
+    // second move broadcast
+    a.rx.recv().await;
+    // calltomove third
+    a.rx.recv().await;
+    // surrender third
+    a.rx.recv().await;
+    // calltomove fourth
+    a.rx.recv().await;
+    // surrender fourth
+    a.rx.recv().await;
+
+    let x  = a.rx.recv().await;
+    dbg!(&x);
+    assert!(matches!(
+        x,
+         Some(ServerToPlayer::CallToMove { who, timers }) if who == First && (8950 < timers.rest_of_time.as_millis() && timers.rest_of_time.as_millis() < 9000)
+    ));
 }
