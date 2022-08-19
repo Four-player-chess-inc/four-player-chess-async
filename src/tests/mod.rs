@@ -1,5 +1,5 @@
 use crate::Timers;
-use crate::{ChessClock, Game, Ingame, JoinErr};
+use crate::{ChessClock, GameBootstrap, Ingame, JoinErr};
 use crate::{PlayerToServer, ServerToPlayer};
 use four_player_chess::ident::Ident::{First, Fourth, Second, Third};
 use four_player_chess::mv::move_or_capture::MoveOrCapture;
@@ -9,8 +9,8 @@ use four_player_chess::state::State;
 use std::collections::HashMap;
 use std::time::Duration;
 
-fn init_game() -> (Game, Ingame, Ingame, Ingame, Ingame) {
-    let mut g = Game::new(ChessClock::default());
+fn init_game() -> (GameBootstrap, Ingame, Ingame, Ingame, Ingame) {
+    let mut g = GameBootstrap::new(ChessClock::default());
     let a = g.join(First).unwrap();
     let b = g.join(Second).unwrap();
     let c = g.join(Third).unwrap();
@@ -21,7 +21,7 @@ fn init_game() -> (Game, Ingame, Ingame, Ingame, Ingame) {
 // currently 4 players only
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn join() {
-    let mut game = Game::new(ChessClock::default());
+    let mut game = GameBootstrap::new(ChessClock::default());
     assert!(game.join(First).is_ok());
     assert!(game.join(Second).is_ok());
     assert!(game.join(Third).is_ok());
@@ -129,7 +129,7 @@ async fn surrenders() {
 // make sure that chess clock does not spend if we make move while fast timer
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn clock_fast() {
-    let mut g = Game::new(ChessClock::new(
+    let mut g = GameBootstrap::new(ChessClock::new(
         Duration::from_secs(2),
         Duration::from_secs(10),
     ));
@@ -177,7 +177,7 @@ async fn clock_fast() {
 // check rest of time consumption
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn clock_rest_of_time() {
-    let mut g = Game::new(ChessClock::new(
+    let mut g = GameBootstrap::new(ChessClock::new(
         Duration::from_secs(2),
         Duration::from_secs(10),
     ));
@@ -230,7 +230,7 @@ async fn clock_rest_of_time() {
 // make sure that timeout surrender works
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn timeout_surrender() {
-    let mut g = Game::new(ChessClock::new(
+    let mut g = GameBootstrap::new(ChessClock::new(
         Duration::from_millis(100),
         Duration::from_millis(200),
     ));

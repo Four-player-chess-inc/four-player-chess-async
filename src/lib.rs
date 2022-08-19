@@ -69,7 +69,7 @@ type ServerRx = UnboundedReceiver<PlayerToServer>;
 type ServerTx = UnboundedSender<ServerToPlayer>;
 type ServerTxs = HashMap<Ident, ServerTx>;
 
-pub struct Game {
+pub struct GameBootstrap {
     players_tx: PlayerTxs,
     players_rx: PlayerRxs,
     all_joined_notify: Arc<Notify>,
@@ -84,8 +84,8 @@ struct ServerRxClock {
     clock: ChessClock,
 }
 
-impl Game {
-    pub fn new(clock: ChessClock) -> Game {
+impl GameBootstrap {
+    pub fn new(clock: ChessClock) -> GameBootstrap {
         let mut server_tx_hm = HashMap::new();
         let mut server_rx_clock_hm = HashMap::new();
         let mut player_tx_hm = HashMap::new();
@@ -116,7 +116,7 @@ impl Game {
             game,
         ));
 
-        Game {
+        GameBootstrap {
             players_tx: player_tx_hm,
             players_rx: player_rx_hm,
             all_joined_notify,
