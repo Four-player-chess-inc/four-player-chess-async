@@ -232,8 +232,8 @@ impl Game {
     }
 }
 
-impl Drop for Game {
+/*impl Drop for Game {
     fn drop(&mut self) {
         self.jh.abort();
     }
-}
+}*/
