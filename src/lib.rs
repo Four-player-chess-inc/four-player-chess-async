@@ -9,7 +9,7 @@ use crate::ingame::Ingame;
 use crate::players_states_diff::PlayersStatesDiff;
 use crate::ServerToPlayer::{CallToMove, GameOver, StateChange};
 use four_player_chess::four_player_chess::FourPlayerChess;
-use four_player_chess::ident::Ident;
+pub use four_player_chess::ident::Ident;
 use four_player_chess::ident::Ident::{First, Fourth, Second, Third};
 use four_player_chess::mv::{MakeMoveError, Move};
 use four_player_chess::state::State;
