@@ -1,5 +1,5 @@
 pub mod chess_clock;
-mod ingame;
+pub mod ingame;
 mod players_states_diff;
 #[cfg(test)]
 mod tests;
