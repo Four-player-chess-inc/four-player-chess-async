@@ -15,12 +15,11 @@ use four_player_chess::mv::{MakeMoveError, Move};
 use four_player_chess::state::State;
 use futures::future::Either;
 use futures::{future, FutureExt};
-use futures_util::SinkExt;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
-use tokio::sync::{Mutex, Notify, RwLock};
+use tokio::sync::{Mutex, Notify};
 use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -178,9 +177,9 @@ impl Game {
 
         while let Some(who_move) = who_move_o {
             let server_tx = server_txs.get(&who_move).unwrap();
-            let mut rxs_clocks = server_rx_clock.get_mut(&who_move).unwrap();
-            let mut server_rx = &mut rxs_clocks.server_rx;
-            let mut clock = &mut rxs_clocks.clock;
+            let rxs_clocks = server_rx_clock.get_mut(&who_move).unwrap();
+            let server_rx = &mut rxs_clocks.server_rx;
+            let clock = &mut rxs_clocks.clock;
 
             Self::broadcast(
                 &server_txs,
@@ -224,7 +223,7 @@ impl Game {
     }
 
     fn broadcast(tx: &ServerTxs, msg: ServerToPlayer) {
-        tx.iter().for_each(|(_, v)| {
+        tx.values().for_each(|v| {
             #[allow(unused_must_use)]
             {
                 v.send(msg.clone());

@@ -128,7 +128,7 @@ async fn surrenders() {
 
 // make sure that chess clock does not spend if we make move while fast timer
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn timeouts() {
+async fn clock_fast() {
     let mut g = Game::new(ChessClock::new(
         Duration::from_secs(2),
         Duration::from_secs(10),
@@ -219,10 +219,41 @@ async fn clock_rest_of_time() {
     // surrender fourth
     a.rx.recv().await;
 
-    let x  = a.rx.recv().await;
+    let x = a.rx.recv().await;
     dbg!(&x);
     assert!(matches!(
         x,
          Some(ServerToPlayer::CallToMove { who, timers }) if who == First && (8950 < timers.rest_of_time.as_millis() && timers.rest_of_time.as_millis() < 9000)
     ));
+}
+
+// make sure that timeout surrender works
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn timeout_surrender() {
+    let mut g = Game::new(ChessClock::new(
+        Duration::from_millis(100),
+        Duration::from_millis(200),
+    ));
+    let mut a = g.join(First).unwrap();
+    let b = g.join(Second).unwrap();
+    let c = g.join(Third).unwrap();
+    let d = g.join(Fourth).unwrap();
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+
+    assert!(matches!(
+        a.rx.recv().await,
+         Some(ServerToPlayer::CallToMove { who, timers }) if who == First
+    ));
+
+    assert!(
+        matches!(a.rx.recv().await, Some(ServerToPlayer::StateChange(state)) if state == HashMap::from([(First, State::Lost)]))
+    );
+    assert!(matches!(
+        a.rx.recv().await,
+         Some(ServerToPlayer::CallToMove { who, timers }) if who == Second
+    ));
+    assert!(
+        matches!(a.rx.recv().await, Some(ServerToPlayer::StateChange(state)) if state == HashMap::from([(Second, State::Lost)]))
+    );
 }

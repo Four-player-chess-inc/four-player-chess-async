@@ -1,8 +1,3 @@
-use futures::future::BoxFuture;
-use futures::FutureExt;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
 use tokio::time::Instant;
 use tokio::time::Sleep;
 use tokio::time::{sleep, Duration};

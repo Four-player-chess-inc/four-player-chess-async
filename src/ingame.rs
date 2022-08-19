@@ -1,5 +1,4 @@
 use crate::{PlayerToServer, ServerToPlayer};
-use four_player_chess::ident::Ident;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
