@@ -133,6 +133,7 @@ impl GameBootstrap {
         }
 
         Ok(Ingame {
+            ident: ident,
             tx: player_tx,
             rx: player_rx,
         })

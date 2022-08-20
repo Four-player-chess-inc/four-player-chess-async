@@ -1,10 +1,11 @@
+use four_player_chess::ident::Ident;
 use crate::{PlayerToServer, ServerToPlayer};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[derive(Debug)]
 pub struct Ingame {
-    //pub(crate) ident: Ident,
+    pub ident: Ident,
     pub(crate) rx: UnboundedReceiver<ServerToPlayer>,
     pub(crate) tx: UnboundedSender<PlayerToServer>,
 }
